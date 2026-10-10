@@ -65,6 +65,7 @@ label.inline{display:inline-flex;align-items:center;gap:6px;font-size:13px;color
 .face{position:absolute;left:0;top:0;width:64px;height:64px;background:#0a0a0a;backface-visibility:hidden}
 .sticker{position:absolute;inset:5px;border-radius:9px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.25)}
 .cubie.dim .sticker{opacity:.28}
+.viewnav{justify-content:center;margin-top:10px}
 .tools{position:absolute;left:12px;bottom:10px;right:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .tools button{padding:5px 10px;font-size:12px}
 .badge{position:absolute;top:12px;left:14px;font-size:30px;font-weight:800;color:#fff;text-shadow:0 2px 8px #000;pointer-events:none}
@@ -130,12 +131,18 @@ label.inline{display:inline-flex;align-items:center;gap:6px;font-size:13px;color
     </div>
   </section>
 
+  <div class="viewcol">
   <section class="viewer" id="viewer">
     <div class="scene" id="scene"><div class="cube" id="cube"></div></div>
     <div class="badge" id="badge"></div>
     <div class="tip">Drag to rotate the cube</div>
     <div class="tools"><button id="resetView">Reset view</button></div>
   </section>
+  <div class="controls viewnav">
+    <button id="prev2">&#9664; Previous</button>
+    <button id="next2" class="primary">Next &#9654;</button>
+  </div>
+  </div>
 </main>
 
 <script id="core">
@@ -900,6 +907,8 @@ function updatePanel() {
   [...$('chips').children].forEach((c, i) => { c.className = 'chip' + (i < idx - 1 ? ' done' : '') + (i === idx - 1 ? ' cur' : ''); });
   $('prev').disabled = idx === 0;
   $('next').disabled = idx >= N;
+  $('prev2').disabled = $('prev').disabled;
+  $('next2').disabled = $('next').disabled;
   $('replay').disabled = idx === 0;
   $('play').disabled = idx >= N;
   if (idx === 0) {
@@ -960,6 +969,8 @@ $('play').onclick = () => {
   next();
 };
 $('next').onclick = () => { stopPlay(); next(); };
+$('next2').onclick = () => $('next').onclick();
+$('prev2').onclick = () => $('prev').onclick();
 $('prev').onclick = () => { stopPlay(); prev(); };
 $('replay').onclick = () => { stopPlay(); replay(); };
 $('follow').onchange = () => { if ($('follow').checked && idx > 0) { const f = FACES[(solution[idx - 1] / 3) | 0]; tweenView(VIEW_FOR[f][0], VIEW_FOR[f][1], 450); } };
