@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3D Rubik's Cube Solver</title>
+<style>
+:root{--bg:#0e1120;--panel:#171b30;--panel2:#1f2440;--line:#2c3357;--txt:#e9ecf8;--mut:#9aa3c8;--acc:#5b8cff;--ok:#38c172;--bad:#ff5d6c}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{padding:14px 22px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+h1{margin:0;font-size:20px}
+header span{color:var(--mut);font-size:13px}
+main{display:grid;grid-template-columns:minmax(320px,540px) 1fr;gap:18px;padding:18px;max-width:1360px;margin:0 auto;align-items:start}
+@media(max-width:920px){main{grid-template-columns:1fr}.viewer{position:relative!important;top:0!important;height:420px!important;order:-1}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.card h2{margin:0 0 8px;font-size:17px;display:flex;align-items:center;gap:10px}
+.num{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--acc);color:#fff;font-size:14px}
+.hint{color:var(--mut);font-size:13px;margin:4px 0 10px}
+details{color:var(--mut);font-size:13px;margin:6px 0 10px}
+details summary{cursor:pointer;color:var(--txt)}
+button{font:inherit;color:var(--txt);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--acc)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.drop{display:block;border:2px dashed var(--line);border-radius:10px;padding:18px;text-align:center;cursor:pointer;color:var(--mut)}
+.drop.over,.drop:hover{border-color:var(--acc);color:var(--txt)}
+.drop strong{color:var(--txt)}
+.drop small{display:block;margin-top:4px}
+.faces{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:12px}
+.face-card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px;font-size:12px}
+.face-card canvas{width:100%;display:block;border-radius:6px;background:#000;cursor:move;touch-action:none}
+.face-card .meta{display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:6px}
+.face-card input[type=range]{width:100%;margin:4px 0 0}
+.face-card button{padding:2px 8px;font-size:12px}
+.dot{display:inline-block;width:11px;height:11px;border-radius:3px;border:1px solid #000;vertical-align:-1px;margin-right:4px}
+.net{display:grid;grid-template-columns:repeat(12,1fr);gap:2px;max-width:440px;margin:10px 0}
+.st{aspect-ratio:1;border:1px solid #000;border-radius:3px;padding:0;cursor:pointer}
+.st.center{cursor:default;outline:2px solid rgba(255,255,255,.35);outline-offset:-3px}
+.status{padding:8px 12px;border-radius:8px;font-size:13px;background:var(--panel2);border:1px solid var(--line)}
+.status.ok{border-color:var(--ok);color:var(--ok)}
+.status.bad{border-color:var(--bad);color:var(--bad)}
+.progress{height:6px;background:var(--panel2);border-radius:4px;overflow:hidden;margin:6px 0 12px}
+.progress div{height:100%;width:0;background:var(--acc);transition:width .3s}
+.move{display:flex;gap:14px;align-items:center;margin-bottom:12px}
+.big{min-width:96px;height:84px;display:grid;place-items:center;border-radius:12px;background:var(--panel2);border:1px solid var(--line);font-size:38px;font-weight:700}
+.big small{display:block;font-size:22px;text-align:center;line-height:1;color:var(--acc)}
+#moveText{font-size:15px}
+#moveText .sub{color:var(--mut);font-size:12px;margin-top:4px}
+#hidden{color:#ffb347;font-size:12px;margin-top:4px}
+.controls{display:flex;gap:8px;flex-wrap:wrap}
+.controls button{flex:1;min-width:90px;padding:11px 10px}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:14px}
+.chip{padding:2px 8px;font-size:13px;border-radius:6px;background:var(--panel2);border:1px solid var(--line);cursor:pointer;min-width:34px;text-align:center}
+.chip.done{background:#24305c;color:var(--mut)}
+.chip.cur{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:700}
+label.inline{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--mut)}
+.viewer{position:sticky;top:14px;height:min(82vh,680px);background:radial-gradient(circle at 50% 40%,#242b52,#0b0d1a);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.scene{position:absolute;inset:0;perspective:1200px;cursor:grab;touch-action:none;user-select:none}
+.scene:active{cursor:grabbing}
+.cube{position:absolute;left:50%;top:50%;width:0;height:0;transform-style:preserve-3d}
+.cubie{position:absolute;width:64px;height:64px;left:-32px;top:-32px;transform-style:preserve-3d}
+.face{position:absolute;left:0;top:0;width:64px;height:64px;background:#0a0a0a;backface-visibility:hidden}
+.sticker{position:absolute;inset:5px;border-radius:9px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.25)}
+.cubie.dim .sticker{opacity:.28}
+.tools{position:absolute;left:12px;bottom:10px;right:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.tools button{padding:5px 10px;font-size:12px}
+.badge{position:absolute;top:12px;left:14px;font-size:30px;font-weight:800;color:#fff;text-shadow:0 2px 8px #000;pointer-events:none}
+.tip{position:absolute;top:16px;right:14px;font-size:12px;color:var(--mut);pointer-events:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>3D Rubik's Cube Solver</h1>
+  <span>Upload 6 photos &rarr; check colors &rarr; follow the steps on the 3D cube</span>
+</header>
+
+<main>
+  <section>
+    <div class="card" id="stepUpload">
+      <h2><span class="num">1</span> Upload all 6 sides</h2>
+      <p class="hint">Select all six photos at once, in any order. Each photo should show one face filling most of the picture (you can drag the grid on a photo and resize it).</p>
+      <details>
+        <summary>Best way to take the photos</summary>
+        <p>Hold the cube with the <b>white</b> center on top and the <b>green</b> center facing you. Photograph: top, front, right, back, left and bottom. For the four side faces keep the white edge at the top of the photo; for the top face keep green toward the bottom of the photo; for the bottom face keep green toward the top. Faces photographed in a different rotation are corrected automatically.</p>
+      </details>
+      <label class="drop" id="drop">
+        <input type="file" id="file" accept="image/*" multiple hidden>
+        <strong>Click to choose images</strong> or drag &amp; drop them here
+        <small id="count">0 / 6 uploaded</small>
+      </label>
+      <div class="faces" id="faces"></div>
+      <div class="row">
+        <button id="demo">No photos? Load a sample scramble</button>
+        <button id="clear">Clear</button>
+      </div>
+      <div id="uploadMsg" class="hint"></div>
+    </div>
+
+    <div class="card" id="stepReview" hidden>
+      <h2><span class="num">2</span> Check the detected colors</h2>
+      <p class="hint">Compare with your real cube. Click any sticker to change its color (centers are fixed).</p>
+      <div class="net" id="net"></div>
+      <div class="status" id="status"></div>
+      <div class="row"><button class="primary" id="solve">Solve the cube</button></div>
+    </div>
+
+    <div class="card" id="stepSolve" hidden>
+      <h2><span class="num">3</span> Follow the steps</h2>
+      <p class="hint">Hold your cube with the <b>white</b> center on top and the <b>green</b> center facing you, exactly like the 3D cube. Press <b>Next</b> for each move.</p>
+      <div id="stepCount" class="hint"></div>
+      <div class="progress"><div id="bar"></div></div>
+      <div class="move">
+        <div class="big" id="moveBig"></div>
+        <div id="moveText"></div>
+      </div>
+      <div class="controls">
+        <button id="prev">&#9664; Back</button>
+        <button id="next" class="primary">Next &#9654;</button>
+        <button id="replay">Replay move</button>
+        <button id="play">Auto-play</button>
+      </div>
+      <div class="row">
+        <label class="inline">Speed <input type="range" id="speed" min="1" max="5" value="2"></label>
+        <label class="inline"><input type="checkbox" id="follow"> Turn the view to the moving face</label>
+      </div>
+      <div class="chips" id="chips"></div>
+    </div>
+  </section>
+
+  <section class="viewer" id="viewer">
+    <div class="scene" id="scene"><div class="cube" id="cube"></div></div>
+    <div class="badge" id="badge"></div>
+    <div class="tip">Drag to rotate the cube</div>
+    <div class="tools"><button id="resetView">Reset view</button></div>
+  </section>
+</main>
+
+<script id="core">
+"use strict";
+const FACES = 'URFDLB';
+const FACE_N = [[0,1,0],[1,0,0],[0,0,1],[0,-1,0],[-1,0,0],[0,0,-1]];
+const SOLVED = 'U'.repeat(9) + 'R'.repeat(9) + 'F'.repeat(9) + 'D'.repeat(9) + 'L'.repeat(9) + 'B'.repeat(9);
+
+function moveName(m) { return FACES[(m / 3) | 0] + ['', '2', "'"][m % 3]; }
+
+/* ---------- 3x3 matrix helpers (physical frame: x right, y up, z toward viewer) ---------- */
+function mmul(A, B) {
+  const r = [[0,0,0],[0,0,0],[0,0,0]];
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) for (let k = 0; k < 3; k++) r[i][j] += A[i][k] * B[k][j];
+  return r;
+}
+function mvec(A, v) { return [0, 1, 2].map(i => A[i][0] * v[0] + A[i][1] * v[1] + A[i][2] * v[2]); }
+function axisAngle(n, th) {
+  const c = Math.cos(th), s = Math.sin(th), t = 1 - c, [x, y, z] = n;
+  return [[t*x*x + c, t*x*y - s*z, t*x*z + s*y],
+          [t*x*y + s*z, t*y*y + c, t*y*z - s*x],
+          [t*x*z - s*y, t*y*z + s*x, t*z*z + c]];
+}
+// Exact clockwise (seen from outside) quarter turn about the face normal, applied `power` times.
+function faceMatrix(f, power) {
+  const [x, y, z] = FACE_N[f];
+  const Q = [[x*x, x*y + z, x*z - y], [x*y - z, y*y, y*z + x], [x*z + y, y*z - x, z*z]];
+  let M = [[1,0,0],[0,1,0],[0,0,1]];
+  for (let i = 0; i < power; i++) M = mmul(Q, M);
+  return M;
+}
+
+/* ---------- geometric cube model ---------- */
+const FACELET_GEO = [];
+for (let f = 0; f < 6; f++) for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+  let pos, n;
+  switch (FACES[f]) {
+    case 'U': n = [0,1,0];  pos = [c - 1, 1, r - 1]; break;
+    case 'R': n = [1,0,0];  pos = [1, 1 - r, 1 - c]; break;
+    case 'F': n = [0,0,1];  pos = [c - 1, 1 - r, 1]; break;
+    case 'D': n = [0,-1,0]; pos = [c - 1, -1, 1 - r]; break;
+    case 'L': n = [-1,0,0]; pos = [-1, 1 - r, c - 1]; break;
+    default:  n = [0,0,-1]; pos = [1 - c, 1 - r, -1];
+  }
+  FACELET_GEO.push({ pos, n });
+}
+
+function makeCubies(facelets) {
+  const cubies = [], byPos = {};
+  for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++) {
+    const c = { p: [x, y, z], R: [[1,0,0],[0,1,0],[0,0,1]], stickers: {} };
+    cubies.push(c); byPos[c.p.join()] = c;
+  }
+  for (let i = 0; i < 54; i++) byPos[FACELET_GEO[i].pos.join()].stickers[FACELET_GEO[i].n.join()] = facelets[i];
+  return cubies;
+}
+function inLayer(c, f) { const n = FACE_N[f]; return c.p[0]*n[0] + c.p[1]*n[1] + c.p[2]*n[2] === 1; }
+function applyMoveInstant(cubies, m, reverse) {
+  const f = (m / 3) | 0;
+  let power = (m % 3) + 1;
+  if (reverse) power = 4 - power;
+  const M = faceMatrix(f, power);
+  for (const c of cubies) if (inLayer(c, f)) { c.p = mvec(M, c.p); c.R = mmul(M, c.R); }
+}
+function cubiesToFacelets(cubies) {
+  const byPos = {};
+  for (const c of cubies) byPos[c.p.join()] = c;
+  let s = '';
+  for (let i = 0; i < 54; i++) {
+    const c = byPos[FACELET_GEO[i].pos.join()], n = FACELET_GEO[i].n;
+    let ch = '?';
+    for (const key in c.stickers) {
+      const w = mvec(c.R, key.split(',').map(Number));
+      if (w[0] === n[0] && w[1] === n[1] && w[2] === n[2]) ch = c.stickers[key];
+    }
+    s += ch;
+  }
+  return s;
+}
+
+/* ---------- cubie-level cube (Kociemba two-phase solver) ---------- */
+const CF = [[8,9,20],[6,18,38],[0,36,47],[2,45,11],[29,26,15],[27,44,24],[33,53,42],[35,17,51]];
+const EF = [[5,10],[7,19],[3,37],[1,46],[32,16],[28,25],[30,43],[34,52],[23,12],[21,41],[50,39],[48,14]];
+const CC = [['U','R','F'],['U','F','L'],['U','L','B'],['U','B','R'],['D','F','R'],['D','L','F'],['D','B','L'],['D','R','B']];
+const EC = [['U','R'],['U','F'],['U','L'],['U','B'],['D','R'],['D','F'],['D','L'],['D','B'],['F','R'],['F','L'],['B','L'],['B','R']];
+
+const URF=0,UFL=1,ULB=2,UBR=3,DFR=4,DLF=5,DBL=6,DRB=7;
+const UR=0,UF=1,UL=2,UB=3,DR=4,DF=5,DL=6,DB=7,FR=8,FL=9,BL=10,BR=11;
+const BASE = [
+  { cp:[UBR,URF,UFL,ULB,DFR,DLF,DBL,DRB], co:[0,0,0,0,0,0,0,0], ep:[UB,UR,UF,UL,DR,DF,DL,DB,FR,FL,BL,BR], eo:[0,0,0,0,0,0,0,0,0,0,0,0] },
+  { cp:[DFR,UFL,ULB,URF,DRB,DLF,DBL,UBR], co:[2,0,0,1,1,0,0,2], ep:[FR,UF,UL,UB,BR,DF,DL,DB,DR,FL,BL,UR], eo:[0,0,0,0,0,0,0,0,0,0,0,0] },
+  { cp:[UFL,DLF,ULB,UBR,URF,DFR,DBL,DRB], co:[1,2,0,0,2,1,0,0], ep:[UR,FL,UL,UB,DR,FR,DL,DB,UF,DF,BL,BR], eo:[0,1,0,0,0,1,0,0,1,1,0,0] },
+  { cp:[URF,UFL,ULB,UBR,DLF,DBL,DRB,DFR], co:[0,0,0,0,0,0,0,0], ep:[UR,UF,UL,UB,DF,DL,DB,DR,FR,FL,BL,BR], eo:[0,0,0,0,0,0,0,0,0,0,0,0] },
+  { cp:[URF,ULB,DBL,UBR,DFR,UFL,DLF,DRB], co:[0,1,2,0,0,2,1,0], ep:[UR,UF,BL,UB,DR,DF,FL,DB,FR,UL,DL,BR], eo:[0,0,0,0,0,0,0,0,0,0,0,0] },
+  { cp:[URF,UFL,UBR,DRB,DFR,DLF,ULB,DBL], co:[0,0,1,2,0,0,2,1], ep:[UR,UF,UL,BR,DR,DF,DL,BL,FR,FL,UB,DB], eo:[0,0,0,1,0,0,0,1,0,0,1,1] }
+];
+function mult(a, b) {
+  const r = { cp: [], co: [], ep: [], eo: [] };
+  for (let i = 0; i < 8; i++) { r.cp[i] = a.cp[b.cp[i]]; r.co[i] = (a.co[b.cp[i]] + b.co[i]) % 3; }
+  for (let i = 0; i < 12; i++) { r.ep[i] = a.ep[b.ep[i]]; r.eo[i] = (a.eo[b.ep[i]] + b.eo[i]) % 2; }
+  return r;
+}
+const MOVES = [];
+for (let f = 0; f < 6; f++) {
+  const b1 = BASE[f], b2 = mult(b1, b1);
+  MOVES.push(b1, b2, mult(b2, b1));
+}
+
+function faceletsToCubie(s) {
+  const cp = [], co = [], ep = [], eo = [];
+  for (let i = 0; i < 8; i++) {
+    const f = CF[i];
+    let ori = 0;
+    for (; ori < 3; ori++) { const ch = s[f[ori]]; if (ch === 'U' || ch === 'D') break; }
+    if (ori === 3) return null;
+    const c0 = s[f[ori]], c1 = s[f[(ori + 1) % 3]], c2 = s[f[(ori + 2) % 3]];
+    let j = 0;
+    for (; j < 8; j++) if (CC[j][0] === c0 && CC[j][1] === c1 && CC[j][2] === c2) break;
+    if (j === 8) return null;
+    cp[i] = j; co[i] = ori;
+  }
+  for (let i = 0; i < 12; i++) {
+    const a = s[EF[i][0]], b = s[EF[i][1]];
+    let found = false;
+    for (let j = 0; j < 12 && !found; j++) {
+      if (a === EC[j][0] && b === EC[j][1]) { ep[i] = j; eo[i] = 0; found = true; }
+      else if (a === EC[j][1] && b === EC[j][0]) { ep[i] = j; eo[i] = 1; found = true; }
+    }
+    if (!found) return null;
+  }
+  return { cp, co, ep, eo };
+}
+function parity(a) { let p = 0; for (let i = 0; i < a.length; i++) for (let j = i + 1; j < a.length; j++) if (a[i] > a[j]) p ^= 1; return p; }
+function checkCubie(c) {
+  if (new Set(c.cp).size !== 8) return 'Some corner pieces are duplicated or missing - check the colors.';
+  if (new Set(c.ep).size !== 12) return 'Some edge pieces are duplicated or missing - check the colors.';
+  if (c.co.reduce((a, b) => a + b, 0) % 3) return 'A corner looks twisted - one corner has its colors misread.';
+  if (c.eo.reduce((a, b) => a + b, 0) % 2) return 'An edge looks flipped - one edge has its colors misread.';
+  if (parity(c.cp) !== parity(c.ep)) return 'Two pieces look swapped - some stickers are probably misread.';
+  return null;
+}
+
+const FACT = [1,1,2,6,24,120,720,5040,40320];
+function encPerm(a, n) {
+  let r = 0;
+  for (let i = 0; i < n - 1; i++) { let c = 0; for (let j = i + 1; j < n; j++) if (a[j] < a[i]) c++; r += c * FACT[n - 1 - i]; }
+  return r;
+}
+function decPerm(idx, n) {
+  const avail = [], a = [];
+  for (let i = 0; i < n; i++) avail.push(i);
+  for (let i = 0; i < n; i++) { const f = FACT[n - 1 - i], q = Math.floor(idx / f); idx %= f; a.push(avail.splice(q, 1)[0]); }
+  return a;
+}
+function encTwist(co) { let t = 0; for (let i = 0; i < 7; i++) t = t * 3 + co[i]; return t; }
+function decTwist(t) { const co = []; let s = 0; for (let i = 6; i >= 0; i--) { co[i] = t % 3; s += co[i]; t = (t / 3) | 0; } co[7] = (3 - s % 3) % 3; return co; }
+function encFlip(eo) { let f = 0; for (let i = 0; i < 11; i++) f = f * 2 + eo[i]; return f; }
+function decFlip(f) { const eo = []; let s = 0; for (let i = 10; i >= 0; i--) { eo[i] = f & 1; s += eo[i]; f >>= 1; } eo[11] = s & 1; return eo; }
+
+const P2 = [0, 1, 2, 9, 10, 11, 4, 13, 7, 16];
+const IS_P2 = new Array(18).fill(false);
+P2.forEach(m => { IS_P2[m] = true; });
+
+function pruneBuild(nA, nB, mA, mB, nm, goalA, goalB) {
+  const size = nA * nB, t = new Int8Array(size).fill(-1), q = new Int32Array(size);
+  let h = 0, tl = 0;
+  const g = goalA * nB + goalB;
+  t[g] = 0; q[tl++] = g;
+  while (h < tl) {
+    const s = q[h++], a = (s / nB) | 0, b = s - a * nB, d = t[s] + 1;
+    for (let m = 0; m < nm; m++) {
+      const ns = mA[a * nm + m] * nB + mB[b * nm + m];
+      if (t[ns] < 0) { t[ns] = d; q[tl++] = ns; }
+    }
+  }
+  return t;
+}
+
+let TABLES = null;
+function ensureTables() {
+  if (TABLES) return TABLES;
+  const nm = 18;
+  const masks = [], maskIdx = new Int16Array(4096).fill(-1);
+  for (let m = 0; m < 4096; m++) { let c = 0, x = m; while (x) { c += x & 1; x >>= 1; } if (c === 4) { maskIdx[m] = masks.length; masks.push(m); } }
+  const twistMove = new Int16Array(2187 * nm), flipMove = new Int16Array(2048 * nm), sliceMove = new Int16Array(495 * nm);
+  for (let t = 0; t < 2187; t++) {
+    const co = decTwist(t);
+    for (let m = 0; m < nm; m++) {
+      const b = MOVES[m], r = [];
+      for (let i = 0; i < 8; i++) r[i] = (co[b.cp[i]] + b.co[i]) % 3;
+      twistMove[t * nm + m] = encTwist(r);
+    }
+  }
+  for (let f = 0; f < 2048; f++) {
+    const eo = decFlip(f);
+    for (let m = 0; m < nm; m++) {
+      const b = MOVES[m], r = [];
+      for (let i = 0; i < 12; i++) r[i] = (eo[b.ep[i]] + b.eo[i]) % 2;
+      flipMove[f * nm + m] = encFlip(r);
+    }
+  }
+  for (let s = 0; s < 495; s++) {
+    const mk = masks[s];
+    for (let m = 0; m < nm; m++) {
+      const b = MOVES[m];
+      let nmk = 0;
+      for (let i = 0; i < 12; i++) if ((mk >> b.ep[i]) & 1) nmk |= 1 << i;
+      sliceMove[s * nm + m] = maskIdx[nmk];
+    }
+  }
+  const cpMove = new Uint16Array(40320 * 10), epMove = new Uint16Array(40320 * 10), slMove = new Uint8Array(24 * 10);
+  for (let idx = 0; idx < 40320; idx++) {
+    const a = decPerm(idx, 8);
+    for (let k = 0; k < 10; k++) {
+      const b = MOVES[P2[k]];
+      const rc = [], re = [];
+      for (let i = 0; i < 8; i++) { rc[i] = a[b.cp[i]]; re[i] = a[b.ep[i]]; }
+      cpMove[idx * 10 + k] = encPerm(rc, 8);
+      epMove[idx * 10 + k] = encPerm(re, 8);
+    }
+  }
+  for (let idx = 0; idx < 24; idx++) {
+    const a = decPerm(idx, 4);
+    for (let k = 0; k < 10; k++) {
+      const b = MOVES[P2[k]], r = [];
+      for (let i = 0; i < 4; i++) r[i] = a[b.ep[8 + i] - 8];
+      slMove[idx * 10 + k] = encPerm(r, 4);
+    }
+  }
+  const goalSlice = maskIdx[0xF00];
+  TABLES = {
+    maskIdx, twistMove, flipMove, sliceMove, cpMove, epMove, slMove,
+    pr1a: pruneBuild(495, 2187, sliceMove, twistMove, nm, goalSlice, 0),
+    pr1b: pruneBuild(495, 2048, sliceMove, flipMove, nm, goalSlice, 0),
+    pr2a: pruneBuild(40320, 24, cpMove, slMove, 10, 0, 0),
+    pr2b: pruneBuild(40320, 24, epMove, slMove, 10, 0, 0)
+  };
+  return TABLES;
+}
+
+function solveCubie(c, maxTotal, timeMs) {
+  const T = ensureTables();
+  const { maskIdx, twistMove, flipMove, sliceMove, cpMove, epMove, slMove, pr1a, pr1b, pr2a, pr2b } = T;
+  const p1 = [];
+  let best = null, nodes = 0, abort = false;
+  const t0 = Date.now();
+
+  function phase2(limit) {
+    let s = c;
+    for (const m of p1) s = mult(s, MOVES[m]);
+    const cp = encPerm(s.cp, 8), ep = encPerm(s.ep.slice(0, 8), 8), sl = encPerm(s.ep.slice(8).map(x => x - 8), 4);
+    const p2 = [];
+    function dfs(cp, ep, sl, left, lf) {
+      const h = Math.max(pr2a[cp * 24 + sl], pr2b[ep * 24 + sl]);
+      if (h > left) return false;
+      if (left === 0) return true;
+      for (let k = 0; k < 10; k++) {
+        const m = P2[k], f = (m / 3) | 0;
+        if (f === lf || lf - f === 3) continue;
+        p2.push(m);
+        if (dfs(cpMove[cp * 10 + k], epMove[ep * 10 + k], slMove[sl * 10 + k], left - 1, f)) return true;
+        p2.pop();
+      }
+      return false;
+    }
+    const last = p1.length ? (p1[p1.length - 1] / 3) | 0 : -1;
+    const h0 = Math.max(pr2a[cp * 24 + sl], pr2b[ep * 24 + sl]);
+    for (let d = Math.max(h0, 0); d <= limit; d++) { p2.length = 0; if (dfs(cp, ep, sl, d, last)) return p2.slice(); }
+    return null;
+  }
+
+  function dfs1(tw, fl, sl, left, lf) {
+    if (abort) return;
+    const h = Math.max(pr1a[sl * 2187 + tw], pr1b[sl * 2048 + fl]);
+    if (h > left) return;
+    if (left === 0) {
+      if (p1.length && IS_P2[p1[p1.length - 1]]) return;
+      const limit = (best ? best.length - 1 : maxTotal) - p1.length;
+      if (limit < 0) return;
+      const r = phase2(limit);
+      if (r) best = p1.concat(r);
+      return;
+    }
+    if ((++nodes & 4095) === 0 && best && Date.now() - t0 > timeMs) { abort = true; return; }
+    for (let m = 0; m < 18; m++) {
+      const f = (m / 3) | 0;
+      if (f === lf || lf - f === 3) continue;
+      p1.push(m);
+      dfs1(twistMove[tw * 18 + m], flipMove[fl * 18 + m], sliceMove[sl * 18 + m], left - 1, f);
+      p1.pop();
+      if (abort) return;
+    }
+  }
+
+  let mk = 0;
+  for (let i = 0; i < 12; i++) if (c.ep[i] >= 8) mk |= 1 << i;
+  const tw0 = encTwist(c.co), fl0 = encFlip(c.eo), sl0 = maskIdx[mk];
+  for (let d1 = 0; d1 <= 12 && !abort; d1++) {
+    if (best && d1 >= best.length) break;
+    dfs1(tw0, fl0, sl0, d1, -1);
+  }
+  return best;
+}
+
+function solveFacelets(s, timeMs) {
+  const c = faceletsToCubie(s);
+  if (!c) return { error: 'Some pieces have impossible color combinations - check the colors.' };
+  const err = checkCubie(c);
+  if (err) return { error: err };
+  for (const limit of [24, 27, 31]) {
+    const sol = solveCubie(c, limit, timeMs || 1200);
+    if (sol) return { moves: sol };
+  }
+  return { error: 'No solution found - please re-check the colors.' };
+}
+
+/* ---------- color analysis ---------- */
+function hungarian(a) {
+  const n = a.length, m = a[0].length, INF = 1e18;
+  const u = new Array(n + 1).fill(0), v = new Array(m + 1).fill(0), p = new Array(m + 1).fill(0), way = new Array(m + 1).fill(0);
+  for (let i = 1; i <= n; i++) {
+    p[0] = i;
+    let j0 = 0;
+    const minv = new Array(m + 1).fill(INF), used = new Array(m + 1).fill(false);
+    do {
+      used[j0] = true;
+      const i0 = p[j0];
+      let delta = INF, j1 = 0;
+      for (let j = 1; j <= m; j++) if (!used[j]) {
+        const cur = a[i0 - 1][j - 1] - u[i0] - v[j];
+        if (cur < minv[j]) { minv[j] = cur; way[j] = j0; }
+        if (minv[j] < delta) { delta = minv[j]; j1 = j; }
+      }
+      for (let j = 0; j <= m; j++) { if (used[j]) { u[p[j]] += delta; v[j] -= delta; } else minv[j] -= delta; }
+      j0 = j1;
+    } while (p[j0] !== 0);
+    do { const j1 = way[j0]; p[j0] = p[j1]; j0 = j1; } while (j0);
+  }
+  const ans = new Array(n);
+  for (let j = 1; j <= m; j++) if (p[j]) ans[p[j] - 1] = j - 1;
+  return ans;
+}
+function rgb2lab(c) {
+  const f = v => { v /= 255; return v > 0.04045 ? Math.pow((v + 0.055) / 1.055, 2.4) : v / 12.92; };
+  const R = f(c[0]), G = f(c[1]), B = f(c[2]);
+  const X = (0.4124 * R + 0.3576 * G + 0.1805 * B) / 0.95047, Y = 0.2126 * R + 0.7152 * G + 0.0722 * B, Z = (0.0193 * R + 0.1192 * G + 0.9505 * B) / 1.08883;
+  const h = t => t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
+  return [116 * h(Y) - 16, 500 * (h(X) - h(Y)), 200 * (h(Y) - h(Z))];
+}
+function labDist(a, b) { const dl = (a[0] - b[0]) * 0.6, da = a[1] - b[1], db = a[2] - b[2]; return Math.sqrt(dl * dl + da * da + db * db); }
+
+const CLET = ['U', 'D', 'R', 'L', 'F', 'B'];
+const PROTO = [[235,235,235],[240,215,40],[190,30,45],[250,125,20],[20,150,70],[20,70,180]].map(rgb2lab);
+const ROT_CW = [6, 3, 0, 7, 4, 1, 8, 5, 2];
+
+// S: six faces (any order), each 9 [r,g,b] samples read row by row.
+function analyzeSamples(S) {
+  const lab = S.map(g => g.map(rgb2lab));
+  const asg = hungarian(lab.map(g => PROTO.map(p => labDist(g[4], p))));
+  const ref = [];
+  asg.forEach((c, i) => { ref[c] = lab[i][4]; });
+  const cost = [];
+  for (let i = 0; i < 6; i++) for (let k = 0; k < 9; k++) {
+    const row = new Array(54);
+    for (let j = 0; j < 54; j++) { const c = (j / 9) | 0; row[j] = k === 4 ? (c === asg[i] ? 0 : 1e6) : labDist(lab[i][k], ref[c]); }
+    cost.push(row);
+  }
+  const a = hungarian(cost);
+  const grids = [], byFace = {};
+  for (let i = 0; i < 6; i++) {
+    grids.push([]);
+    for (let k = 0; k < 9; k++) grids[i].push(CLET[(a[i * 9 + k] / 9) | 0]);
+    byFace[CLET[asg[i]]] = grids[i];
+  }
+  const opts = FACES.split('').map(f => { const arr = [byFace[f]]; for (let r = 1; r < 4; r++) arr.push(ROT_CW.map(i => arr[r - 1][i])); return arr; });
+  let best = null;
+  for (let code = 0; code < 4096; code++) {
+    const rots = [0, 1, 2, 3, 4, 5].map(i => (code >> (2 * i)) & 3);
+    const score = rots.reduce((s, r) => s + (r ? 1 : 0), 0);
+    if (best && score >= best.score) continue;
+    const str = rots.map((r, i) => opts[i][r].join('')).join('');
+    const c = faceletsToCubie(str);
+    if (c && !checkCubie(c)) best = { score, str, rots };
+  }
+  if (!best) best = { score: 0, str: opts.map(o => o[0].join('')).join(''), rots: [0,0,0,0,0,0] };
+  return { facelets: best.str, grids, imageFace: asg.map(c => CLET[c]), rotated: best.score };
+}
+</script>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const COLORS = { U: '#ffffff', R: '#c8102e', F: '#00a651', D: '#ffd500', L: '#ff6a13', B: '#0057b8' };
+const CNAME = { U: 'white', R: 'red', F: 'green', D: 'yellow', L: 'orange', B: 'blue' };
+const FNAME = { U: 'TOP', R: 'RIGHT', F: 'FRONT', D: 'BOTTOM', L: 'LEFT', B: 'BACK' };
+const SZ = 64;
+
+let faces = [];
+let facelets = SOLVED.split('');
+let solution = [], initial = '', idx = 0;
+let cubies = [], anim = null, playing = false, playTimer = 0;
+
+/* ---------- 3D scene ---------- */
+const cubeEl = $('cube'), sceneEl = $('scene');
+const DEFAULT_VIEW = { ax: -28, ay: -38 };
+const view = { ...DEFAULT_VIEW };
+let scale = 1, viewRaf = 0;
+
+function applyView() { cubeEl.style.transform = `scale(${scale}) rotateX(${view.ax}deg) rotateY(${view.ay}deg)`; }
+function fitScale() { scale = Math.max(0.5, Math.min(2.4, Math.min(sceneEl.clientWidth, sceneEl.clientHeight) / 400)); applyView(); }
+function tweenView(ax, ay, ms) {
+  cancelAnimationFrame(viewRaf);
+  const sx = view.ax, sy = view.ay, dy = (((ay - view.ay) % 360) + 540) % 360 - 180, t0 = performance.now();
+  const step = now => {
+    const t = Math.min(1, (now - t0) / ms), e = t * t * (3 - 2 * t);
+    view.ax = sx + (ax - sx) * e; view.ay = sy + dy * e; applyView();
+    if (t < 1) viewRaf = requestAnimationFrame(step); else updateHint();
+  };
+  viewRaf = requestAnimationFrame(step);
+}
+const VIEW_FOR = { U: [-62, -30], D: [62, -30], F: [-25, -25], R: [-25, -65], L: [-25, 65], B: [-25, 155] };
+
+(() => {
+  let drag = null;
+  sceneEl.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY }; cancelAnimationFrame(viewRaf); sceneEl.setPointerCapture(e.pointerId); });
+  sceneEl.addEventListener('pointermove', e => {
+    if (!drag) return;
+    view.ay += (e.clientX - drag.x) * 0.5;
+    view.ax = Math.max(-90, Math.min(90, view.ax - (e.clientY - drag.y) * 0.5));
+    drag = { x: e.clientX, y: e.clientY };
+    applyView();
+  });
+  const end = () => { if (drag) { drag = null; updateHint(); } };
+  sceneEl.addEventListener('pointerup', end);
+  sceneEl.addEventListener('pointercancel', end);
+  window.addEventListener('resize', fitScale);
+})();
+$('resetView').onclick = () => tweenView(DEFAULT_VIEW.ax, DEFAULT_VIEW.ay, 500);
+
+function cssMatrix(R, p) {
+  const s = [1, -1, 1], m = (i, j) => R[i][j] * s[i] * s[j];
+  return `matrix3d(${m(0,0)},${m(1,0)},${m(2,0)},0,${m(0,1)},${m(1,1)},${m(2,1)},0,${m(0,2)},${m(1,2)},${m(2,2)},0,${p[0] * SZ},${-p[1] * SZ},${p[2] * SZ},1)`;
+}
+const FACE_CSS = {
+  '1,0,0': `rotateY(90deg) translateZ(${SZ / 2}px)`,
+  '-1,0,0': `rotateY(-90deg) translateZ(${SZ / 2}px)`,
+  '0,1,0': `rotateX(90deg) translateZ(${SZ / 2}px)`,
+  '0,-1,0': `rotateX(-90deg) translateZ(${SZ / 2}px)`,
+  '0,0,1': `translateZ(${SZ / 2}px)`,
+  '0,0,-1': `rotateY(180deg) translateZ(${SZ / 2}px)`
+};
+function makeCubieEl(c) {
+  const el = document.createElement('div');
+  el.className = 'cubie';
+  for (const key in FACE_CSS) {
+    const f = document.createElement('div');
+    f.className = 'face';
+    f.style.transform = FACE_CSS[key];
+    if (c.stickers[key]) {
+      const s = document.createElement('div');
+      s.className = 'sticker';
+      s.style.background = COLORS[c.stickers[key]] || '#555';
+      f.appendChild(s);
+    }
+    el.appendChild(f);
+  }
+  return el;
+}
+function buildScene(str) {
+  finishAnim();
+  cubeEl.innerHTML = '';
+  cubies = makeCubies(str);
+  for (const c of cubies) { c.el = makeCubieEl(c); cubeEl.appendChild(c.el); }
+  renderAll();
+  setDim(null);
+}
+function renderAll() { for (const c of cubies) c.el.style.transform = cssMatrix(c.R, c.p); }
+function setDim(m) {
+  for (const c of cubies) c.el.classList.toggle('dim', m !== null && !inLayer(c, (m / 3) | 0));
+}
+
+function durationMs() { return 1400 / Number($('speed').value); }
+function animateMove(m, reverse, done) {
+  finishAnim();
+  const f = (m / 3) | 0, k = m % 3;
+  let deg = [-90, -180, 90][k];
+  if (reverse) deg = -deg;
+  anim = { m, f, deg, reverse, layer: cubies.filter(c => inLayer(c, f)), t0: performance.now(), dur: durationMs(), done, raf: 0 };
+  setDim(m);
+  if ($('follow').checked) tweenView(VIEW_FOR[FACES[f]][0], VIEW_FOR[FACES[f]][1], 450);
+  anim.raf = requestAnimationFrame(tick);
+}
+function tick(now) {
+  if (!anim) return;
+  const t = Math.min(1, (now - anim.t0) / anim.dur), e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  const A = axisAngle(FACE_N[anim.f], anim.deg * Math.PI / 180 * e);
+  for (const c of anim.layer) c.el.style.transform = cssMatrix(mmul(A, c.R), mvec(A, c.p));
+  if (t >= 1) finishAnim(); else anim.raf = requestAnimationFrame(tick);
+}
+function finishAnim() {
+  if (!anim) return;
+  const a = anim;
+  anim = null;
+  cancelAnimationFrame(a.raf);
+  const M = faceMatrix(a.f, a.reverse ? 4 - ((a.m % 3) + 1) : (a.m % 3) + 1);
+  for (const c of a.layer) { c.p = mvec(M, c.p); c.R = mmul(M, c.R); c.el.style.transform = cssMatrix(c.R, c.p); }
+  setDim(null);
+  if (a.done) a.done();
+}
+
+function updateHint() {
+  const el = $('hidden');
+  if (!el) return;
+  if (!solution.length || idx === 0 || idx > solution.length) { el.textContent = ''; return; }
+  const n = FACE_N[(solution[idx - 1] / 3) | 0], rad = Math.PI / 180;
+  const x = n[0], y = -n[1], z = n[2];
+  const x1 = x * Math.cos(view.ay * rad) + z * Math.sin(view.ay * rad), z1 = -x * Math.sin(view.ay * rad) + z * Math.cos(view.ay * rad);
+  const z2 = y * Math.sin(view.ax * rad) + z1 * Math.cos(view.ax * rad);
+  el.textContent = z2 < 0.15 ? 'That face is on the far side of the 3D cube - drag to rotate it, or tick "Turn the view to the moving face".' : '';
+}
+
+/* ---------- photo upload & color detection ---------- */
+function loadImg(file) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => res(img);
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Cannot read ' + file.name)); };
+    img.src = url;
+  });
+}
+function clampCrop(f) {
+  const s = f.size * Math.min(f.w, f.h);
+  f.x0 = Math.max(0, Math.min(f.w - s, f.x0));
+  f.y0 = Math.max(0, Math.min(f.h - s, f.y0));
+  return s;
+}
+function centerCrop(f) {
+  const s = f.size * Math.min(f.w, f.h);
+  f.x0 = (f.w - s) / 2; f.y0 = (f.h - s) / 2;
+  clampCrop(f);
+}
+async function addFiles(list) {
+  const files = [...list].filter(f => f.type.startsWith('image/'));
+  $('uploadMsg').textContent = '';
+  for (const file of files) {
+    if (faces.length >= 6) { $('uploadMsg').textContent = 'Only 6 images are used - extra files were ignored.'; break; }
+    try {
+      const img = await loadImg(file);
+      const f = { img, w: img.naturalWidth, h: img.naturalHeight, size: 0.9, x0: 0, y0: 0, samples: null, letters: null, center: null, cv: null };
+      centerCrop(f);
+      faces.push(f);
+    } catch (e) { $('uploadMsg').textContent = e.message; }
+  }
+  renderFaces();
+  analyze();
+}
+function sampleFace(f) {
+  const s = clampCrop(f), N = 240, cv = document.createElement('canvas');
+  cv.width = cv.height = N;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(f.img, f.x0, f.y0, s, s, 0, 0, N, N);
+  const d = ctx.getImageData(0, 0, N, N).data, cell = N / 3, out = [];
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+    const ch = [[], [], []];
+    for (let y = Math.floor(r * cell + cell * 0.3); y < r * cell + cell * 0.7; y++)
+      for (let x = Math.floor(c * cell + cell * 0.3); x < c * cell + cell * 0.7; x++) {
+        const i = (y * N + x) * 4;
+        ch[0].push(d[i]); ch[1].push(d[i + 1]); ch[2].push(d[i + 2]);
+      }
+    out.push(ch.map(a => { a.sort((p, q) => p - q); return a[a.length >> 1]; }));
+  }
+  f.samples = out;
+}
+function renderFaces() {
+  const box = $('faces');
+  box.innerHTML = '';
+  $('count').textContent = `${faces.length} / 6 uploaded`;
+  faces.forEach((f, i) => {
+    const card = document.createElement('div');
+    card.className = 'face-card';
+    const cv = document.createElement('canvas');
+    const sc = Math.min(200 / f.w, 200 / f.h);
+    cv.width = Math.round(f.w * sc); cv.height = Math.round(f.h * sc);
+    f.cv = cv; f.sc = sc;
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const lab = document.createElement('span');
+    f.labelEl = lab;
+    const rm = document.createElement('button');
+    rm.textContent = 'Remove';
+    rm.onclick = () => { faces.splice(i, 1); renderFaces(); analyze(); };
+    meta.append(lab, rm);
+    const rng = document.createElement('input');
+    rng.type = 'range'; rng.min = 30; rng.max = 100; rng.value = Math.round(f.size * 100);
+    rng.title = 'Grid size';
+    rng.oninput = () => { f.size = rng.value / 100; clampCrop(f); drawCard(f); };
+    rng.onchange = () => analyze();
+    let drag = null;
+    cv.onpointerdown = e => { drag = { x: e.clientX, y: e.clientY, x0: f.x0, y0: f.y0 }; cv.setPointerCapture(e.pointerId); };
+    cv.onpointermove = e => {
+      if (!drag) return;
+      const k = f.w / cv.getBoundingClientRect().width;
+      f.x0 = drag.x0 + (e.clientX - drag.x) * k; f.y0 = drag.y0 + (e.clientY - drag.y) * k;
+      clampCrop(f); drawCard(f);
+    };
+    cv.onpointerup = () => { if (drag) { drag = null; analyze(); } };
+    card.append(cv, meta, rng);
+    box.appendChild(card);
+    drawCard(f);
+  });
+}
+function drawCard(f) {
+  if (!f.cv) return;
+  const ctx = f.cv.getContext('2d'), s = clampCrop(f) * f.sc, x = f.x0 * f.sc, y = f.y0 * f.sc;
+  ctx.drawImage(f.img, 0, 0, f.cv.width, f.cv.height);
+  ctx.lineWidth = 3; ctx.strokeStyle = '#000';
+  const draw = () => {
+    ctx.strokeRect(x, y, s, s);
+    for (let i = 1; i < 3; i++) {
+      ctx.beginPath(); ctx.moveTo(x + s * i / 3, y); ctx.lineTo(x + s * i / 3, y + s); ctx.moveTo(x, y + s * i / 3); ctx.lineTo(x + s, y + s * i / 3); ctx.stroke();
+    }
+  };
+  draw();
+  ctx.lineWidth = 1; ctx.strokeStyle = '#fff';
+  draw();
+  if (f.letters) {
+    f.letters.forEach((l, k) => {
+      const cx = x + s * ((k % 3) + 0.5) / 3, cy = y + s * (((k / 3) | 0) + 0.5) / 3;
+      ctx.beginPath(); ctx.arc(cx, cy, Math.max(4, s / 17), 0, 7);
+      ctx.fillStyle = COLORS[l]; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#000'; ctx.stroke();
+    });
+    f.labelEl.innerHTML = `<span class="dot" style="background:${COLORS[f.center]}"></span>${CNAME[f.center]} center`;
+  } else f.labelEl.textContent = '';
+}
+function analyze() {
+  hideSolve();
+  if (faces.length < 6) {
+    faces.forEach(f => { f.letters = null; drawCard(f); });
+    return;
+  }
+  faces.forEach(sampleFace);
+  const res = analyzeSamples(faces.map(f => f.samples));
+  faces.forEach((f, i) => { f.letters = res.grids[i]; f.center = res.imageFace[i]; drawCard(f); });
+  setFacelets(res.facelets.split(''));
+  if (res.rotated) $('status').dataset.note = `${res.rotated} photo(s) were rotated automatically to fit.`;
+  else delete $('status').dataset.note;
+  validate();
+}
+const drop = $('drop');
+$('file').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+$('clear').onclick = () => { faces = []; renderFaces(); hideSolve(); $('stepReview').hidden = true; facelets = SOLVED.split(''); buildScene(SOLVED); };
+$('demo').onclick = () => {
+  const cs = makeCubies(SOLVED);
+  let last = -1;
+  for (let i = 0; i < 25; i++) {
+    let f;
+    do { f = (Math.random() * 6) | 0; } while (f === last);
+    last = f;
+    applyMoveInstant(cs, f * 3 + ((Math.random() * 3) | 0));
+  }
+  faces = []; renderFaces();
+  setFacelets(cubiesToFacelets(cs).split(''));
+  delete $('status').dataset.note;
+  validate();
+};
+
+/* ---------- review & edit ---------- */
+const ORIGIN = { U: [3, 0], R: [6, 3], F: [3, 3], D: [3, 6], L: [0, 3], B: [9, 3] };
+function setFacelets(arr) {
+  facelets = arr;
+  hideSolve();
+  $('stepReview').hidden = false;
+  renderNet();
+  buildScene(arr.join(''));
+}
+function renderNet() {
+  const net = $('net');
+  net.innerHTML = '';
+  for (let i = 0; i < 54; i++) {
+    const f = FACES[(i / 9) | 0], j = i % 9, o = ORIGIN[f];
+    const b = document.createElement('button');
+    b.className = 'st' + (j === 4 ? ' center' : '');
+    b.style.gridColumn = o[0] + (j % 3) + 1;
+    b.style.gridRow = o[1] + ((j / 3) | 0) + 1;
+    b.style.background = COLORS[facelets[i]];
+    b.title = CNAME[facelets[i]];
+    if (j !== 4) b.onclick = () => {
+      facelets[i] = FACES[(FACES.indexOf(facelets[i]) + 1) % 6];
+      setFacelets(facelets);
+      validate();
+    };
+    net.appendChild(b);
+  }
+}
+function validate() {
+  const s = facelets.join(''), st = $('status');
+  const counts = {};
+  for (const ch of s) counts[ch] = (counts[ch] || 0) + 1;
+  const wrong = FACES.split('').filter(f => counts[f] !== 9).map(f => `${CNAME[f]}: ${counts[f] || 0}`);
+  let err = null;
+  if (wrong.length) err = 'Each color must appear exactly 9 times (' + wrong.join(', ') + '). Click stickers to fix.';
+  else {
+    const c = faceletsToCubie(s);
+    err = c ? checkCubie(c) : 'Some pieces have impossible color combinations - compare with your cube and fix the stickers.';
+  }
+  const note = st.dataset.note ? ' ' + st.dataset.note : '';
+  st.className = 'status ' + (err ? 'bad' : 'ok');
+  st.textContent = err ? err : 'Cube looks valid and solvable.' + note;
+  $('solve').disabled = !!err;
+}
+
+/* ---------- solving & guidance ---------- */
+function hideSolve() {
+  stopPlay();
+  solution = []; idx = 0;
+  $('stepSolve').hidden = true;
+  $('badge').textContent = '';
+}
+$('solve').onclick = () => {
+  const st = $('status');
+  st.className = 'status';
+  st.textContent = 'Computing the solution...';
+  $('solve').disabled = true;
+  setTimeout(() => {
+    let r;
+    try { r = solveFacelets(facelets.join('')); } catch (e) { r = { error: 'Solver error: ' + e.message }; }
+    $('solve').disabled = false;
+    if (r.error) { st.className = 'status bad'; st.textContent = r.error; return; }
+    st.className = 'status ok';
+    st.textContent = r.moves.length ? `Solution found: ${r.moves.length} moves.` : 'This cube is already solved.';
+    startGuide(r.moves);
+  }, 40);
+};
+function startGuide(moves) {
+  stopPlay();
+  solution = moves; idx = 0;
+  initial = facelets.join('');
+  buildScene(initial);
+  tweenView(DEFAULT_VIEW.ax, DEFAULT_VIEW.ay, 500);
+  const chips = $('chips');
+  chips.innerHTML = '';
+  moves.forEach((m, i) => {
+    const c = document.createElement('div');
+    c.className = 'chip';
+    c.textContent = moveName(m);
+    c.onclick = () => { stopPlay(); goTo(i + 1); };
+    chips.appendChild(c);
+  });
+  $('stepSolve').hidden = false;
+  updatePanel();
+  $('stepSolve').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+const DIRS = ['clockwise (quarter turn, 90\u00b0)', 'a half turn (180\u00b0, either direction)', 'counter-clockwise (quarter turn, 90\u00b0)'];
+const GLYPH = ['\u21bb', '\u21bb\u21bb', '\u21ba'];
+function updatePanel() {
+  const N = solution.length, big = $('moveBig'), txt = $('moveText');
+  $('stepCount').textContent = idx === 0 ? `${N} moves to solve the cube` : `Step ${idx} of ${N}`;
+  $('bar').style.width = (N ? idx / N * 100 : 100) + '%';
+  [...$('chips').children].forEach((c, i) => { c.className = 'chip' + (i < idx - 1 ? ' done' : '') + (i === idx - 1 ? ' cur' : ''); });
+  $('prev').disabled = idx === 0;
+  $('next').disabled = idx >= N;
+  $('replay').disabled = idx === 0;
+  $('play').disabled = idx >= N;
+  if (idx === 0) {
+    big.textContent = '\u25b6';
+    txt.innerHTML = N ? 'Hold the cube with <b>white</b> on top and <b>green</b> facing you, then press <b>Next</b>.' : 'The cube is already solved.';
+    $('badge').textContent = '';
+    updateHint();
+  } else showMove();
+}
+function showMove() {
+  const m = solution[idx - 1], f = FACES[(m / 3) | 0], k = m % 3, nxt = solution[idx];
+  $('moveBig').innerHTML = `${moveName(m)}<small>${GLYPH[k]}</small>`;
+  $('badge').textContent = moveName(m) + ' ' + GLYPH[k];
+  $('moveText').innerHTML = `Turn the <b>${FNAME[f]}</b> face (${CNAME[f]} center) <b>${DIRS[k]}</b>.` +
+    `<div class="sub">Clockwise means as if you were looking straight at that face.${nxt !== undefined ? ' Next: <b>' + moveName(nxt) + '</b>' : ' <b>This is the last move - the cube will then be solved!</b>'}</div><div id="hidden"></div>`;
+  updateHint();
+}
+function next() {
+  if (idx >= solution.length) return;
+  finishAnim();
+  const m = solution[idx++];
+  updatePanel();
+  animateMove(m, false, () => { if (playing) schedulePlay(); });
+}
+function prev() {
+  if (idx === 0) return;
+  finishAnim();
+  const m = solution[--idx];
+  updatePanel();
+  animateMove(m, true);
+}
+function replay() {
+  if (idx === 0) return;
+  finishAnim();
+  const m = solution[idx - 1];
+  applyMoveInstant(cubies, m, true);
+  renderAll();
+  animateMove(m, false);
+}
+function goTo(n) {
+  finishAnim();
+  buildScene(initial);
+  for (let i = 0; i < n; i++) applyMoveInstant(cubies, solution[i]);
+  renderAll();
+  idx = n;
+  updatePanel();
+}
+function schedulePlay() {
+  clearTimeout(playTimer);
+  playTimer = setTimeout(() => { if (playing && idx < solution.length) next(); else stopPlay(); }, 350);
+}
+function stopPlay() { playing = false; clearTimeout(playTimer); $('play').textContent = 'Auto-play'; }
+$('play').onclick = () => {
+  if (playing) { stopPlay(); return; }
+  if (idx >= solution.length) return;
+  playing = true;
+  $('play').textContent = 'Pause';
+  next();
+};
+$('next').onclick = () => { stopPlay(); next(); };
+$('prev').onclick = () => { stopPlay(); prev(); };
+$('replay').onclick = () => { stopPlay(); replay(); };
+$('follow').onchange = () => { if ($('follow').checked && idx > 0) { const f = FACES[(solution[idx - 1] / 3) | 0]; tweenView(VIEW_FOR[f][0], VIEW_FOR[f][1], 450); } };
+window.addEventListener('keydown', e => {
+  if ($('stepSolve').hidden || e.target.tagName === 'INPUT') return;
+  if (e.key === 'ArrowRight') { stopPlay(); next(); } else if (e.key === 'ArrowLeft') { stopPlay(); prev(); }
+});
+
+fitScale();
+buildScene(SOLVED);
+</script>
+</body>
+</html>
